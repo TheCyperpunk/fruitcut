@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#140c24" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍉</text></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800&display=swap" rel="stylesheet" />
+    <title>fruitcut</title>
+  </head>
+  <body>
+    <video id="camera" playsinline muted></video>
+    <div id="stage" class="stage">
+      <canvas id="bg"></canvas>
+      <canvas id="gl"></canvas>
+      <canvas id="fx"></canvas>
+    </div>
+
+    <div id="hud" class="hud" hidden>
+      <div id="timer-bar" class="timer-bar"><div id="timer-fill" class="timer-fill"></div></div>
+      <div id="level" class="level"></div>
+      <div id="score" class="score">0</div>
+      <div id="timer" class="timer"></div>
+      <div id="progress" class="progress"></div>
+    </div>
+    <div id="banner" class="banner" hidden></div>
+    <div id="toast" class="toast" hidden></div>
+    <div id="hint" class="hint" hidden>Raise one hand so the camera can see it</div>
+    <pre id="stats" class="stats" hidden></pre>
+    <button id="settings-button" class="icon-button" type="button" aria-label="Settings" hidden>⚙</button>
+    <button id="pause-button" class="icon-button pause-button" type="button" aria-label="Pause" hidden>❚❚</button>
+
+    <!-- Title screen. The fruit around it are drawn by the game's own renderer on #gl. -->
+    <section id="start" class="start">
+      <div class="start-inner">
+        <header class="title">
+          <h1 id="logo" class="logo" aria-label="fruitcut">
+            <span class="logo-piece logo-top" aria-hidden="true">fruitcut</span>
+            <span class="logo-piece logo-bottom" aria-hidden="true">fruitcut</span>
+            <svg class="logo-cut" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              <defs>
+                <linearGradient id="cut-grad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0" stop-color="#ffffff" stop-opacity="0" />
+                  <stop offset="0.3" stop-color="#fff8dc" />
+                  <stop offset="0.7" stop-color="#ffd23f" />
+                  <stop offset="1" stop-color="#ff3b55" />
+                </linearGradient>
+              </defs>
+              <line x1="-6" y1="72.28" x2="106" y2="29.72" pathLength="100" />
+            </svg>
+          </h1>
+          <p class="tagline">Slice fruit out of the air with your bare hand.</p>
+        </header>
+
+        <div class="howto">
+          <svg class="hand" viewBox="0 -14 220 190" aria-hidden="true">
+            <defs>
+              <linearGradient id="swipe-grad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="#ffd23f" stop-opacity="0" />
+                <stop offset="0.55" stop-color="#ffd23f" />
+                <stop offset="1" stop-color="#ffffff" />
+              </linearGradient>
+            </defs>
+            <path class="swipe" d="M 84 22 C 112 -2, 160 -4, 200 28" />
+            <path class="ticks" d="M 172 46 L 186 38 M 178 62 L 194 58" />
+            <path class="skin" d="M 62 150 L 58 118 C 40 118, 24 108, 30 98 C 36 90, 50 92, 62 100 L 68 100 L 68 42 C 68 26, 94 26, 94 42 L 94 92 C 104 86, 130 84, 138 96 L 140 140 C 140 160, 126 170, 110 170 L 70 170 C 64 170, 62 160, 62 150 Z" />
+            <circle class="skin" cx="120" cy="100" r="13" />
+            <circle class="skin" cx="126" cy="122" r="13" />
+            <circle class="skin" cx="118" cy="144" r="12" />
+            <path class="crease" d="M 72 100 Q 81 107 90 100" />
+            <circle class="tip" cx="81" cy="29" r="8" />
+          </svg>
+          <ol class="steps">
+            <li><b>Stand back.</b> An arm's length or more, so the camera sees your whole hand.</li>
+            <li><b>Swipe with your index finger.</b> Later levels add more fingers.</li>
+            <li><b>Skip the bombs.</b> Each one costs 5 seconds. A fist never cuts.</li>
+          </ol>
+        </div>
+
+        <div class="go">
+          <button id="start-button" type="button">Play</button>
+          <p id="start-status" class="status" role="status"></p>
+          <p class="privacy">Play turns on your camera. Video stays on this device and is never recorded or uploaded.</p>
+          <p id="best" class="best" hidden></p>
+          <button id="settings-link" class="link" type="button">Settings</button>
+        </div>
+      </div>
+    </section>
+
+    <dialog id="settings" class="settings" aria-labelledby="settings-title">
+      <form id="settings-form" method="dialog">
+        <h2 id="settings-title">Settings</h2>
+        <label class="row"><span>Sound effects</span><input type="checkbox" name="sound" /></label>
+        <label class="row"><span>Music <small>an 80s synth loop</small></span><input type="checkbox" name="music" /></label>
+        <label class="row" id="vibration-row"><span>Vibration</span><input type="checkbox" name="vibration" /></label>
+        <label class="row"><span>Reduce motion <small>no shaking or flashes</small></span><input type="checkbox" name="reducedMotion" /></label>
+        <label class="row"><span>Bombs <small>cutting one costs 5 seconds</small></span><input type="checkbox" name="bombs" /></label>
+        <fieldset class="row">
+          <legend>Pace</legend>
+          <label><input type="radio" name="pace" value="relaxed" />Relaxed</label>
+          <label><input type="radio" name="pace" value="normal" />Normal</label>
+        </fieldset>
+        <fieldset class="row">
+          <legend>Fruit size</legend>
+          <label><input type="radio" name="fruitSize" value="normal" />Normal</label>
+          <label><input type="radio" name="fruitSize" value="large" />Large</label>
+        </fieldset>
+        <fieldset class="row">
+          <legend>Swipe sensitivity</legend>
+          <label><input type="radio" name="sensitivity" value="gentle" />Gentle</label>
+          <label><input type="radio" name="sensitivity" value="normal" />Normal</label>
+        </fieldset>
+        <label class="row"><span>Show debug stats</span><input type="checkbox" name="debug" /></label>
+        <p class="keys">Keys: <b>P</b> pause · <b>D</b> debug · <b>M</b> camera view · <b>R</b> record hand movement</p>
+        <button type="submit" class="primary">Done</button>
+      </form>
+    </dialog>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

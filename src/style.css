@@ -1,0 +1,600 @@
+:root {
+  --bg: #120822;
+  --plum: #2a1447;
+  --card: rgba(28, 18, 48, 0.88);
+  --text: #fff3e4;
+  --muted: #c4b3dc;
+  --accent: #ff3b55; /* watermelon flesh: the one action colour */
+  --accent-2: #ffd23f; /* lemon: timers, highlights, the blade trail */
+  --lime: #8fd14f;
+  --display: 'Lilita One', 'Arial Rounded MT Bold', system-ui, sans-serif;
+  font-family: 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 600;
+  color: var(--text);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  /* Night sky behind the title fruit; during play the camera covers it. */
+  background: radial-gradient(ellipse 80% 70% at 50% 35%, #2f1554 0%, #1a0b30 55%, var(--bg) 100%) fixed var(--bg);
+  touch-action: none;
+}
+
+#camera {
+  display: none;
+}
+
+.stage {
+  position: fixed;
+  inset: 0;
+  will-change: transform;
+}
+
+#bg,
+#gl,
+#fx {
+  position: absolute;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* ---- title screen ------------------------------------------------------ */
+
+.start {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  overflow: auto;
+  text-align: center;
+  text-shadow: 0 2px 12px rgba(10, 4, 20, 0.7);
+}
+
+.start-inner {
+  display: grid;
+  gap: 30px;
+  width: min(640px, 100%);
+}
+
+/* The word is cut in two along a diagonal, with the blade's trail still glowing in the gap. */
+.logo {
+  position: relative;
+  display: inline-block;
+  margin: 0;
+  font: 400 clamp(64px, 13vw, 140px) / 1 var(--display);
+  letter-spacing: 0.01em;
+  color: var(--text);
+  text-shadow: 0 0.05em 0 #5a1838, 0 0.12em 0.3em rgba(0, 0, 0, 0.5);
+}
+
+.logo-piece {
+  display: block;
+  padding: 0.06em 0.08em; /* room for the shadow and the slide, inside the clip box */
+  margin: -0.06em -0.08em;
+}
+
+.logo-top {
+  clip-path: polygon(-10% 73.8%, 110% 28.2%, 110% -20%, -10% -20%);
+}
+
+.logo-bottom {
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(-10% 73.8%, 110% 28.2%, 110% 130%, -10% 130%);
+  transform: translate(0.04em, 0.07em);
+  animation: logo-split 600ms cubic-bezier(0.2, 0.9, 0.3, 1) 450ms both;
+}
+
+.logo-cut {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px rgba(255, 210, 63, 0.9));
+}
+
+.logo-cut line {
+  stroke: url(#cut-grad);
+  stroke-width: 5;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0;
+  animation: logo-cut 520ms ease-out 150ms both;
+}
+
+@keyframes logo-split {
+  from {
+    transform: none;
+  }
+}
+
+@keyframes logo-cut {
+  from {
+    stroke-dashoffset: 100;
+  }
+}
+
+.tagline {
+  margin: 14px 0 0;
+  font-size: clamp(17px, 2.2vw, 21px);
+  color: var(--muted);
+}
+
+.howto {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 22px;
+  align-items: center;
+  text-align: left;
+}
+
+.hand {
+  width: 150px;
+  height: auto;
+  overflow: visible;
+}
+
+.hand .skin {
+  fill: #ffdcb8;
+  stroke: var(--plum);
+  stroke-width: 5;
+  stroke-linejoin: round;
+}
+
+.hand .crease {
+  fill: none;
+  stroke: var(--plum);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.hand .swipe {
+  fill: none;
+  stroke: url(#swipe-grad);
+  stroke-width: 7;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 5px rgba(255, 210, 63, 0.8));
+}
+
+.hand .ticks {
+  fill: none;
+  stroke: var(--accent-2);
+  stroke-width: 4;
+  stroke-linecap: round;
+  opacity: 0.75;
+}
+
+.hand .tip {
+  fill: #fff;
+  filter: drop-shadow(0 0 8px #ffd23f) drop-shadow(0 0 3px #fff);
+}
+
+.steps {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.steps li {
+  position: relative;
+  padding-left: 44px;
+  counter-increment: step;
+}
+
+.steps b {
+  font-weight: 800;
+  color: #fff;
+}
+
+/* Numbered because it really is an order: get in position, then swipe, then avoid. */
+.steps li::before {
+  content: counter(step);
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--accent-2);
+  color: var(--plum);
+  font: 400 17px / 1 var(--display);
+  text-shadow: none;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+}
+
+.steps li:nth-child(2)::before {
+  background: var(--lime);
+}
+
+.steps li:nth-child(3)::before {
+  background: var(--accent);
+  color: #fff;
+}
+
+.go {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+
+#start-button {
+  min-width: min(320px, 100%);
+  padding: 17px 56px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ff6a78 0%, var(--accent) 50%, #e4213d 100%);
+  color: #fff;
+  font: 400 30px / 1 var(--display);
+  letter-spacing: 0.03em;
+  text-shadow: 0 2px 0 rgba(90, 10, 30, 0.6);
+  box-shadow: 0 7px 0 #8a1830, 0 16px 34px rgba(255, 59, 85, 0.35);
+  cursor: pointer;
+  transition: transform 90ms, box-shadow 90ms, filter 120ms;
+}
+
+#start-button:hover {
+  filter: brightness(1.08);
+}
+
+#start-button:active {
+  transform: translateY(5px);
+  box-shadow: 0 2px 0 #8a1830, 0 8px 20px rgba(255, 59, 85, 0.3);
+}
+
+#start-button:focus-visible {
+  outline: 3px solid var(--accent-2);
+  outline-offset: 4px;
+}
+
+#start-button:disabled {
+  opacity: 0.7;
+  transform: none;
+  filter: none;
+  cursor: progress;
+}
+
+.status {
+  min-height: 1.4em;
+  margin: 0;
+  color: var(--accent-2);
+  font-size: 15px;
+}
+
+.privacy {
+  max-width: 46ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.best {
+  margin: 0;
+  color: var(--accent-2);
+  font-size: 15px;
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.link:hover,
+.link:focus-visible {
+  color: var(--text);
+}
+
+/* Portrait: the cut watermelon sits above the logo, so leave it a band. */
+@media (max-aspect-ratio: 11/10) {
+  .start-inner {
+    padding-top: min(16vh, 150px);
+  }
+}
+
+@media (max-width: 600px) {
+  .start-inner {
+    gap: 24px;
+  }
+
+  .howto {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 14px;
+  }
+
+  .hand {
+    width: 120px;
+  }
+
+  .steps {
+    font-size: 15px;
+  }
+
+  #start-button {
+    width: 100%;
+    font-size: 26px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-bottom,
+  .logo-cut line {
+    animation: none;
+  }
+}
+
+:root.reduced-motion .logo-bottom,
+:root.reduced-motion .logo-cut line {
+  animation: none;
+}
+
+.icon-button {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pause-button {
+  right: 60px;
+  font-size: 15px;
+  letter-spacing: -2px;
+}
+
+.settings {
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  padding: 0;
+  border: 0;
+  border-radius: 20px;
+  background: var(--card);
+  color: var(--text);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+}
+
+.settings::backdrop {
+  background: rgba(10, 6, 20, 0.6);
+}
+
+.settings form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 22px 24px;
+}
+
+.settings h2 {
+  margin: 0 0 6px;
+  font: 400 26px / 1.2 var(--display);
+}
+
+.settings .row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 15px;
+}
+
+.settings .row small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.settings legend {
+  float: left;
+  padding: 0;
+}
+
+.settings fieldset label {
+  margin-left: 10px;
+  white-space: nowrap;
+}
+
+.settings input[type='checkbox'] {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--accent);
+}
+
+.settings input[type='radio'] {
+  accent-color: var(--accent);
+}
+
+.settings .keys {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.settings .primary {
+  margin-top: 8px;
+  padding: 12px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ff6a78, var(--accent) 50%, #e4213d);
+  color: white;
+  font: 400 20px / 1 var(--display);
+  letter-spacing: 0.03em;
+  box-shadow: 0 4px 0 #8a1830;
+  cursor: pointer;
+}
+
+.hint {
+  position: fixed;
+  left: 50%;
+  bottom: 32px;
+  transform: translateX(-50%);
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+.hud {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.level {
+  margin-bottom: 2px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.progress {
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.score {
+  font: 400 54px / 1 var(--display);
+  -webkit-text-stroke: 1.5px rgba(20, 8, 30, 0.6);
+}
+
+.score.pop {
+  animation: score-pop 260ms cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+
+@keyframes score-pop {
+  from {
+    transform: scale(1.45);
+    color: var(--accent-2);
+  }
+}
+
+.timer {
+  margin-top: 4px;
+  color: var(--accent-2);
+  font: 400 22px / 1.2 var(--display);
+  font-variant-numeric: tabular-nums;
+}
+
+.timer-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.timer-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-2), #ff7a45);
+  transition: width 250ms linear;
+}
+
+.timer-fill.low {
+  background: var(--accent);
+  animation: timer-blink 500ms steps(2, start) infinite;
+}
+
+.timer-fill.frenzy {
+  background: linear-gradient(90deg, #fff1b8, var(--accent-2), #ff7a45);
+  animation: timer-blink 250ms steps(2, start) infinite;
+}
+
+@keyframes timer-blink {
+  to {
+    opacity: 0.45;
+  }
+}
+
+.toast {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.banner {
+  position: fixed;
+  top: 22%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 12px 22px;
+  border-radius: 16px;
+  background: rgba(20, 12, 36, 0.7);
+  font: 400 24px / 1.4 var(--display);
+  letter-spacing: 0.01em;
+  text-align: center;
+  white-space: pre-line;
+  pointer-events: none;
+}
+
+.stats {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.6);
+  font: 12px/1.5 ui-monospace, Consolas, monospace;
+  pointer-events: none;
+}
+

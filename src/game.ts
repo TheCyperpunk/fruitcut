@@ -149,6 +149,24 @@ export class Game {
     removeWhere(this.halves, (h) => h.y - h.radius * 2 > this.height);
   }
 
+  /** Back to the title: forget the run (records stay), remove everything in flight. */
+  reset(): void {
+    this.state = 'ready';
+    this.score = 0;
+    this.level = 0;
+    this.def = levelAt(0);
+    this.kinds = FRUIT_KINDS;
+    this.levelStartScore = 0;
+    this.frenzy = false;
+    this.stats = { fruit: 0, bombs: 0, bestCombo: 0 };
+    this.combo = 0;
+    this.comboKey = -1;
+    this.freezeUntil = -Infinity;
+    this.fruits.length = 0;
+    this.halves.length = 0;
+    this.events.length = 0;
+  }
+
   pause(): void {
     if (this.state !== 'playing') return;
     this.state = 'paused';

@@ -2,3 +2,4 @@ node_modules
 dist
 public/wasm
 .playwright-mcp
+.env*.local

@@ -15,6 +15,7 @@ import { isFist } from './gestures';
 import { HandMask } from './handMask';
 import { Music } from './music';
 import { downloadRecording, Recorder } from './recorder';
+import { cleanName, fetchBoard, loadPlayer, savePlayer, SHARED, submitScore, type Board } from './scoreboard';
 import { FruitScene, type SceneView } from './scene';
 import { loadSettings, rulesFor, saveSettings, type Settings } from './settings';
 import type { Tracker } from './tracker';
@@ -42,6 +43,21 @@ const loadFill = $('load-fill');
 const loadText = $('load-text');
 const crashEl = $('crash');
 const crashReload = $<HTMLButtonElement>('crash-reload');
+const playerNameInput = $<HTMLInputElement>('player-name');
+const boardLink = $<HTMLButtonElement>('board-link');
+const boardEl = $('board');
+const boardScope = $('board-scope');
+const boardList = $('board-list');
+const boardMe = $('board-me');
+const boardForm = $<HTMLFormElement>('board-form');
+const boardName = $<HTMLInputElement>('board-name');
+const boardClose = $<HTMLButtonElement>('board-close');
+const boardQuit = $<HTMLButtonElement>('board-quit');
+const menuEl = $('menu');
+const menuTitle = $('menu-title');
+const menuContinue = $<HTMLButtonElement>('menu-continue');
+const menuBoard = $<HTMLButtonElement>('menu-board');
+const menuQuit = $<HTMLButtonElement>('menu-quit');
 const hint = $('hint');
 const hud = $('hud');
 const levelEl = $('level');
@@ -123,6 +139,11 @@ let trauma = 0; // screen shake energy, 0..1
 let toastTimer = 0;
 let devHand: NormalizedLandmark[] | null = null; // dev-only synthetic hand, see bottom of file
 let fakeCamera: FakeCamera | null = null; // dev-only, `?fakecam=1`
+let player = loadPlayer(storage);
+let pendingScore: { score: number; level: number } | null = null; // a score waiting for a name
+let menuOpen = false;
+let running = false; // camera on and the game loop going; false on the title
+let cameraLoopStarted = false;
 
 function resize(): void {
   width = window.innerWidth;
@@ -285,6 +306,111 @@ function showLoadDone(): void {
   window.setTimeout(() => (loadEl.hidden = true), 1800);
 }
 
+// ---- scoreboard, menu, quit -----------------------------------------------
+
+function setName(raw: string): void {
+  player = { ...player, name: cleanName(raw) };
+  savePlayer(storage, player);
+  playerNameInput.value = player.name;
+  boardName.value = player.name;
+}
+
+/** Record a run's score. Without a name it waits in the board panel for one. */
+async function recordScore(score: number, level: number): Promise<void> {
+  if (score <= 0) return;
+  if (!player.name) {
+    pendingScore = { score, level };
+    return;
+  }
+  pendingScore = null;
+  try {
+    await submitScore(player, score, level, storage);
+  } catch (err) {
+    console.warn('Score not saved', err);
+  }
+}
+
+async function openBoard(): Promise<void> {
+  boardEl.hidden = false;
+  boardScope.textContent = SHARED ? 'Everyone who has played' : 'This device only';
+  boardForm.hidden = Boolean(player.name) && !pendingScore;
+  boardName.value = player.name;
+  boardQuit.hidden = !running;
+  boardList.replaceChildren(boardItem('board-loading', 'Loading…'));
+  boardMe.textContent = pendingScore ? `${pendingScore.score} points, waiting for a name` : '';
+  try {
+    renderBoard(await fetchBoard(player, storage));
+  } catch (err) {
+    console.warn(err);
+    boardList.replaceChildren();
+    boardMe.textContent = "Couldn't reach the scoreboard. Check your connection and try again.";
+  }
+}
+
+function closeBoard(): void {
+  boardEl.hidden = true;
+}
+
+function boardItem(className: string, text: string): HTMLLIElement {
+  const li = document.createElement('li');
+  li.className = className;
+  li.textContent = text;
+  return li;
+}
+
+function renderBoard(board: Board): void {
+  if (!board.rows.length) {
+    boardList.replaceChildren(boardItem('board-empty', 'No scores yet. Yours could be the first.'));
+  } else {
+    boardList.replaceChildren(
+      ...board.rows.map((r, i) => {
+        const li = document.createElement('li');
+        if (r.player_id === player.id) li.classList.add('me');
+        for (const [cls, text] of [['rank', String(i + 1)], ['name', r.name], ['score', String(r.score)], ['lvl', `L${r.level}`]] as const) {
+          const span = document.createElement('span');
+          span.className = cls;
+          span.textContent = text;
+          li.append(span);
+        }
+        return li;
+      }),
+    );
+  }
+  if (pendingScore) return; // the "waiting for a name" line stays
+  boardMe.textContent = board.rank ? `You're #${board.rank} of ${board.total}` : player.name ? 'No score saved yet' : 'Enter a name to save your score';
+}
+
+/** Camera off, back to the title. The run's score is recorded first. */
+function quit(): void {
+  void recordScore(game.score, game.level + 1);
+  closeBoard();
+  menuOpen = false;
+  menuEl.hidden = true;
+  running = false;
+  music.stop();
+  const stream = video.srcObject as MediaStream | null;
+  if (stream && !fakeCamera) for (const track of stream.getTracks()) track.stop(); // the camera light goes off
+  video.srcObject = null;
+  game.reset();
+  lastHand = null;
+  lastFist = false;
+  devHand = null;
+  trauma = 0;
+  stage.style.transform = '';
+  lastScore = -1;
+  bannerText = '';
+  bgCtx.setTransform(1, 0, 0, 1, 0, 0);
+  bgCtx.clearRect(0, 0, bg.width, bg.height);
+  fxCtx.setTransform(1, 0, 0, 1, 0, 0);
+  fxCtx.clearRect(0, 0, fx.width, fx.height);
+  for (const el of [hud, pauseButton, settingsButton, hint, banner, toast]) el.hidden = true;
+  startButton.disabled = false;
+  startButton.textContent = fakeCamera ? 'Play (fake camera)' : 'Play';
+  startStatus.textContent = '';
+  startScreen.hidden = false;
+  showTitle();
+}
+
 function hideTitle(): void {
   titleActive = false;
   cancelAnimationFrame(titleRaf);
@@ -349,9 +475,24 @@ function openSettings(): void {
   settingsDialog.showModal();
 }
 
-function togglePause(): void {
+// The pause button, P and Esc open a menu (pausing the round); closing it resumes.
+function openMenu(): void {
   if (game.state === 'playing') game.pause();
-  else if (game.state === 'paused') game.resume();
+  menuOpen = true;
+  menuTitle.textContent = game.state === 'paused' ? 'Paused' : 'Menu';
+  menuEl.hidden = false;
+}
+
+function closeMenu(): void {
+  menuOpen = false;
+  menuEl.hidden = true;
+  if (game.state === 'paused') game.resume();
+}
+
+function togglePause(): void {
+  if (menuOpen) closeMenu();
+  else if (game.state === 'paused') game.resume(); // paused by the settings dialog
+  else openMenu();
 }
 
 // ---- camera frames --------------------------------------------------------
@@ -487,12 +628,14 @@ function onGameEvent(e: GameEvent): void {
     case 'levelStart':
       sfx.start();
       music.intensity = 0;
+      closeBoard();
       levelBannerUntil = game.time + 3000;
       bannerText = ''; // force a refresh
       break;
     case 'cleared':
       sfx.frenzy();
       music.intensity = 0;
+      void recordScore(e.score, e.level + 1); // the board always has the run so far
       effects.flash('#ffd089', game.time);
       effects.popup({ x: width / 2, y: height * 0.3 }, 'Level cleared!', game.time, true);
       saveNumber(BEST_LEVEL_KEY, game.bestLevel);
@@ -504,6 +647,7 @@ function onGameEvent(e: GameEvent): void {
       music.intensity = 0;
       effects.flash('#ffffff', game.time);
       if (e.newBest) saveNumber(BEST_KEY, e.best);
+      void recordScore(e.score, e.level + 1).then(openBoard);
       break;
     case 'pause':
       music.duck(true);
@@ -535,10 +679,10 @@ function updateHud(): void {
   }
   const left = game.timeLeft;
   const inRound = game.state === 'playing' || game.state === 'paused';
-  pauseButton.hidden = !inRound;
+  pauseButton.hidden = !running;
   const paused = game.state === 'paused';
-  pauseButton.textContent = paused ? '▶' : '❚❚';
-  pauseButton.setAttribute('aria-label', paused ? 'Play' : 'Pause');
+  pauseButton.textContent = menuOpen ? '✕' : paused ? '▶' : game.state === 'playing' ? '❚❚' : '☰';
+  pauseButton.setAttribute('aria-label', menuOpen ? 'Close menu' : paused ? 'Play' : game.state === 'playing' ? 'Pause' : 'Menu');
   levelEl.textContent = `Level ${game.level + 1} · ${game.def.name} · ${fingersLabel(game.fingers)}`;
   progressEl.textContent = inRound ? `${game.stats.fruit} / ${game.target} fruit` : '';
   timerEl.textContent = inRound ? `${Math.ceil(left)}s` : '';
@@ -552,7 +696,7 @@ function updateHud(): void {
   if (game.state === 'ready') text = 'Slice the watermelon to start';
   else if (game.state === 'playing' && game.time < levelBannerUntil) {
     text = `Level ${game.level + 1}: ${game.def.name}\n${game.def.intro}\nCut ${game.target} in ${game.def.seconds} s`;
-  } else if (game.state === 'paused') text = 'Paused\nPress ▶ or P to continue';
+  } else if (game.state === 'paused') text = menuOpen ? '' : 'Paused\nPress ▶ or P to continue';
   else if (game.state === 'cleared') {
     text = `Level ${game.level + 1} cleared!\n${summary}` + (game.hasStarter ? '\nSlice to continue' : '');
   } else if (game.state === 'over') {
@@ -580,6 +724,7 @@ function updateShake(dt: number): void {
 }
 
 function renderFrame(now: number): void {
+  if (!running) return; // quit: the title loop draws instead
   const dt = lastRenderNow ? Math.min((now - lastRenderNow) / 1000, 0.05) : 0;
   lastRenderNow = now;
 
@@ -634,9 +779,11 @@ function captureTimeOf(now: number, meta: VideoFrameCallbackMetadata): number {
 }
 
 function runCameraLoop(): void {
+  if (cameraLoopStarted) return; // the callbacks below outlive a quit and pick up the next stream
+  cameraLoopStarted = true;
   if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
     const onFrame = (now: number, meta: VideoFrameCallbackMetadata) => {
-      onCameraFrame(captureTimeOf(now, meta));
+      if (running) onCameraFrame(captureTimeOf(now, meta));
       video.requestVideoFrameCallback(onFrame);
     };
     video.requestVideoFrameCallback(onFrame);
@@ -647,7 +794,7 @@ function runCameraLoop(): void {
   const poll = () => {
     if (video.currentTime !== lastVideoTime) {
       lastVideoTime = video.currentTime;
-      onCameraFrame(performance.now());
+      if (running) onCameraFrame(performance.now());
     }
     requestAnimationFrame(poll);
   };
@@ -675,6 +822,7 @@ async function start(): Promise<void> {
   settingsButton.hidden = false;
   hint.hidden = false;
   if (settings.music) music.start();
+  running = true;
   runCameraLoop();
   requestAnimationFrame(renderFrame);
 }
@@ -708,6 +856,8 @@ if (import.meta.env.DEV) {
       effects,
       handMask,
       music,
+      quit,
+      openBoard,
       injectHand: (hand: NormalizedLandmark[] | null) => {
         devHand = hand;
         fakeCamera?.setHand(hand ? hand[9].x : null, hand ? hand[9].y : 0);
@@ -753,9 +903,24 @@ startButton.addEventListener('click', start);
 settingsButton.addEventListener('click', openSettings);
 pauseButton.addEventListener('click', togglePause);
 settingsLink.addEventListener('click', openSettings);
+playerNameInput.value = player.name;
+playerNameInput.addEventListener('change', () => setName(playerNameInput.value));
+boardLink.addEventListener('click', () => void openBoard());
+boardClose.addEventListener('click', closeBoard);
+boardQuit.addEventListener('click', quit);
+boardForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  setName(boardName.value);
+  const pending = pendingScore;
+  void (pending ? recordScore(pending.score, pending.level) : Promise.resolve()).then(openBoard);
+});
+menuContinue.addEventListener('click', closeMenu);
+menuBoard.addEventListener('click', () => void openBoard());
+menuQuit.addEventListener('click', quit);
 settingsForm.addEventListener('change', readSettingsForm);
 window.addEventListener('keydown', (e) => {
   if (settingsDialog.open) return; // the dialog handles its own keys
+  if (e.target instanceof HTMLInputElement) return; // typing a name
   const key = e.key.toLowerCase();
   if (key === 'p' || key === 'escape') togglePause();
   if (key === 'd') {

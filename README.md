@@ -25,7 +25,20 @@ npm run build        # static site in dist/
 5. Each fruit is +1; three or more in one swipe (any fingers) is a combo worth +2 each.
 6. Don't cut the spiked bombs: each costs 5 seconds and breaks your combo. A fist
    never slices, so make one when a bomb passes.
-7. The ❚❚ / ▶ button (or **P**) pauses and resumes.
+7. The ❚❚ button (or **P** / **Esc**) opens the menu: continue, scoreboard, or
+   quit to the title (which turns the camera off).
+8. When time runs out the scoreboard appears. Enter a name once and your best
+   run is saved under it; everyone who plays sees the same board.
+
+## Scoreboard
+
+Scores live in a small Supabase table (`public.scores`, one row per player
+with their best run). The player's name and a random id are kept in the
+browser's localStorage, so there is no login. The table is readable by anyone;
+writes only go through the `submit_score` function, which checks the name and
+score range and keeps the best. Configure it with `VITE_SUPABASE_URL` and
+`VITE_SUPABASE_ANON_KEY` (a `.env.local` locally, project env on Vercel);
+without them the board is kept on the device only.
 
 The level table is `src/levels.ts`; every number in it is meant to be tuned.
 

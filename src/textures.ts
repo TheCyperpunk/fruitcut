@@ -32,11 +32,17 @@ function hash(s: string): number {
   return h >>> 0;
 }
 
+// Phones draw the maps at half size: a fruit is ~150 px across there, so the
+// skin is still oversampled, and drawing costs a quarter of the time.
+const DETAIL = typeof screen !== 'undefined' && Math.min(screen.width, screen.height) < 500 ? 0.5 : 1;
+
 function makeCanvas(w: number, h: number): [HTMLCanvasElement, Ctx] {
   const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  return [canvas, canvas.getContext('2d')!];
+  canvas.width = Math.round(w * DETAIL);
+  canvas.height = Math.round(h * DETAIL);
+  const ctx = canvas.getContext('2d')!;
+  ctx.scale(DETAIL, DETAIL); // patterns keep drawing in w × h units
+  return [canvas, ctx];
 }
 
 function toTexture(canvas: HTMLCanvasElement, srgb = true): THREE.Texture {

@@ -16,9 +16,8 @@ import { HandMask } from './handMask';
 import { Music } from './music';
 import { downloadRecording, Recorder } from './recorder';
 import { FruitScene, type SceneView } from './scene';
-import { PersonSegmenter } from './segmenter';
 import { loadSettings, rulesFor, saveSettings, type Settings } from './settings';
-import { createTracker, type Tracker } from './tracker';
+import type { Tracker } from './tracker';
 import { drawFingertip, drawTrail } from './trail';
 import { CoverMapper } from './view';
 import type { NormalizedLandmark } from '@mediapipe/tasks-vision';
@@ -38,6 +37,11 @@ const startButton = $<HTMLButtonElement>('start-button');
 const startStatus = $('start-status');
 const logo = $('logo');
 const bestEl = $('best');
+const loadEl = $('load');
+const loadFill = $('load-fill');
+const loadText = $('load-text');
+const crashEl = $('crash');
+const crashReload = $<HTMLButtonElement>('crash-reload');
 const hint = $('hint');
 const hud = $('hud');
 const levelEl = $('level');
@@ -95,14 +99,13 @@ const effects = new Effects();
 const backdrop = new Backdrop();
 const sfx = new Sfx();
 const music = new Music();
-performance.mark('scene-build-start');
-const scene = new FruitScene($<HTMLCanvasElement>('gl')); // draws every skin and compiles every shader up front
-performance.measure('scene-build', 'scene-build-start');
+const scene = new FruitScene($<HTMLCanvasElement>('gl'));
 const game = new Game(window.innerWidth, window.innerHeight, loadNumber(BEST_KEY), Math.random, loadNumber(BEST_LEVEL_KEY));
 const handMask = new HandMask();
 const recorder = new Recorder();
 
 let tracker: Tracker;
+let trackerPromise: Promise<Tracker> | null = null; // started while the title is up, see preloadTracker
 let segmenterLoading = false;
 let lastFist = false;
 let width = 0;
@@ -164,6 +167,7 @@ const TITLE_TALL: TitleSpot[] = [
   { name: 'grapes', u: 0.86, v: 0.94, scale: 0.9 },
 ];
 const TITLE_AXIS: [number, number, number] = [0.33, 0.94, 0]; // a tilted spin shows stems and bellies in turn
+const TITLE_KINDS = [...new Set([...TITLE_WIDE, ...TITLE_TALL].map((s) => s.name).concat('watermelon'))].map((n) => KINDS_BY_NAME.get(n)!);
 
 const title: SceneView & { fruits: Fruit[]; halves: Half[] } = { fruits: [], halves: [], time: 300 };
 const titleRest = new Map<number, { x: number; y: number; phase: number }>();
@@ -229,10 +233,56 @@ function showTitle(): void {
     bestEl.textContent = `Your best: ${game.best} points${level}`;
     bestEl.hidden = false;
   }
+  performance.mark('title-art-start');
+  scene.prepare(TITLE_KINDS); // only what the title shows; the rest is drawn while it's on screen
+  performance.measure('title-art', 'title-art-start');
   titleActive = true;
   titleLast = 0;
   buildTitle();
   titleRaf = requestAnimationFrame(renderTitle);
+  requestAnimationFrame(() => {
+    // Runs after the first title frame: finish the fruit art in idle time and
+    // fetch the tracking runtime, so Play is close to instant.
+    scene.prepareAll();
+    if (!saveData()) preloadTracker().catch(() => undefined); // a failure here is reported when Play is pressed
+  });
+}
+
+// ---- hand tracking download -----------------------------------------------
+// 22 MB of runtime and model. Downloading it while the title is up, with a
+// progress bar, turns a long "Starting…" into a short one.
+
+function preloadTracker(): Promise<Tracker> {
+  trackerPromise ??= import('./tracker')
+    .then((m) => m.createTracker(showLoadProgress))
+    .then((t) => {
+      showLoadDone();
+      return t;
+    })
+    .catch((err: unknown) => {
+      trackerPromise = null; // the next attempt starts over
+      loadEl.hidden = true;
+      throw err;
+    });
+  return trackerPromise;
+}
+
+function saveData(): boolean {
+  return (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true;
+}
+
+function showLoadProgress(loaded: number, total: number): void {
+  loadEl.hidden = false;
+  loadFill.style.width = `${Math.min(100, (100 * loaded) / total).toFixed(1)}%`;
+  loadText.textContent = `Loading hand tracking: ${(loaded / 1e6).toFixed(0)} of ${(total / 1e6).toFixed(0)} MB`;
+}
+
+function showLoadDone(): void {
+  loadEl.hidden = false;
+  loadEl.classList.add('done');
+  loadFill.style.width = '100%';
+  loadText.textContent = 'Hand tracking ready';
+  window.setTimeout(() => (loadEl.hidden = true), 1800);
 }
 
 function hideTitle(): void {
@@ -363,7 +413,8 @@ function onCameraFrame(captureT: number): void {
 function ensureSegmenter(): void {
   if (handMask.segmenter || segmenterLoading) return;
   segmenterLoading = true;
-  PersonSegmenter.create()
+  import('./segmenter')
+    .then((m) => m.PersonSegmenter.create())
     .then((s) => (handMask.segmenter = s))
     .catch((err: unknown) => console.warn('Segmentation unavailable; showing the landmark hand shape', err));
 }
@@ -609,7 +660,7 @@ async function start(): Promise<void> {
   startButton.disabled = true;
   startStatus.textContent = 'Starting camera and hand tracking…';
   try {
-    [, tracker] = await Promise.all([startCamera(video, fakeCamera?.stream), createTracker()]);
+    [, tracker] = await Promise.all([startCamera(video, fakeCamera?.stream), preloadTracker()]);
     if (handMask.needsSegmenter()) ensureSegmenter();
   } catch (err) {
     startButton.disabled = false;
@@ -627,6 +678,16 @@ async function start(): Promise<void> {
   runCameraLoop();
   requestAnimationFrame(renderFrame);
 }
+
+// If something throws past every handler, say so instead of freezing silently.
+function showCrash(reason: unknown): void {
+  if (String(reason).includes('ResizeObserver')) return; // benign browser noise
+  crashEl.hidden = false;
+  console.error(reason);
+}
+window.addEventListener('error', (e) => showCrash(e.error ?? e.message));
+window.addEventListener('unhandledrejection', (e) => showCrash(e.reason));
+crashReload.addEventListener('click', () => location.reload());
 
 // A hidden tab gets no frames and would drift out of time, so audio stops with it.
 document.addEventListener('visibilitychange', () => {

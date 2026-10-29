@@ -1,4 +1,11 @@
-import { HandLandmarker, type NormalizedLandmark } from '@mediapipe/tasks-vision';
+import type { NormalizedLandmark } from '@mediapipe/tasks-vision';
+
+// MediaPipe's HAND_CONNECTIONS, copied so this overlay doesn't pull the
+// tracking library into the title page.
+const HAND_CONNECTIONS: [number, number][] = [
+  [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11],
+  [11, 12], [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [0, 17], [17, 18], [18, 19], [19, 20],
+];
 import type { CoverMapper } from './view';
 
 export function drawLandmarks(ctx: CanvasRenderingContext2D, hand: NormalizedLandmark[], mapper: CoverMapper): void {
@@ -7,7 +14,7 @@ export function drawLandmarks(ctx: CanvasRenderingContext2D, hand: NormalizedLan
   ctx.strokeStyle = 'rgba(120, 255, 180, 0.7)';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  for (const { start, end } of HandLandmarker.HAND_CONNECTIONS) {
+  for (const [start, end] of HAND_CONNECTIONS) {
     ctx.moveTo(pts[start].x, pts[start].y);
     ctx.lineTo(pts[end].x, pts[end].y);
   }

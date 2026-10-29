@@ -82,12 +82,21 @@
         <div class="go">
           <button id="start-button" type="button">Play</button>
           <p id="start-status" class="status" role="status"></p>
+          <div id="load" class="load" aria-live="polite" hidden>
+            <div class="load-bar"><div id="load-fill" class="load-fill"></div></div>
+            <span id="load-text"></span>
+          </div>
           <p class="privacy">Play turns on your camera. Video stays on this device and is never recorded or uploaded.</p>
           <p id="best" class="best" hidden></p>
           <button id="settings-link" class="link" type="button">Settings</button>
         </div>
       </div>
     </section>
+
+    <div id="crash" class="crash" role="alert" hidden>
+      <p>Something went wrong and the game stopped.</p>
+      <button id="crash-reload" type="button">Reload</button>
+    </div>
 
     <dialog id="settings" class="settings" aria-labelledby="settings-title">
       <form id="settings-form" method="dialog">

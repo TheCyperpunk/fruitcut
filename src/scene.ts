@@ -56,6 +56,7 @@ export class FruitScene {
   private readonly bombSpike = new THREE.MeshStandardMaterial({ color: 0x3a3a44, metalness: 0.8, roughness: 0.3 });
   private readonly bombLight = new THREE.MeshStandardMaterial({ color: 0xff2b2b, emissive: 0xff2b2b, emissiveIntensity: 1.5 });
   private readonly objects = new Map<number, THREE.Object3D>();
+  private bombCompiled = false;
   private readonly qAlign = new THREE.Quaternion();
   private readonly qTilt = new THREE.Quaternion();
   private readonly qSpin = new THREE.Quaternion();
@@ -86,15 +87,49 @@ export class FruitScene {
     rim.position.set(1, 0.3, 0.15);
     this.scene.add(rim);
 
-    for (const kind of FRUIT_KINDS) this.assets.set(kind, this.buildAssets(kind));
-    this.precompile();
+  }
+
+  // Art is built on demand: the title's fruit first (`prepare`), the rest in
+  // idle time (`prepareAll`), and anything launched before that on first use.
+  private assetsFor(kind: FruitKind): KindAssets {
+    let a = this.assets.get(kind);
+    if (!a) {
+      a = this.buildAssets(kind);
+      this.assets.set(kind, a);
+    }
+    return a;
+  }
+
+  /** Draw the skins and compile the shaders for `kinds` now. */
+  prepare(kinds: Iterable<FruitKind>): void {
+    const fresh = [...kinds].filter((k) => !this.assets.has(k));
+    for (const kind of fresh) this.assetsFor(kind);
+    this.precompile(fresh);
+  }
+
+  /** Build every remaining kind, one per idle slice, so the page stays responsive meanwhile. */
+  prepareAll(): void {
+    const pending = FRUIT_KINDS.filter((k) => !this.assets.has(k));
+    const idle = window.requestIdleCallback?.bind(window) ?? ((cb: () => void) => window.setTimeout(cb, 16));
+    const step = () => {
+      const kind = pending.shift();
+      if (!kind) return;
+      this.prepare([kind]);
+      idle(step);
+    };
+    idle(step);
   }
 
   // Three compiles a material's shader the first time it is drawn, which
-  // would stall the first cut of a round. Draw everything once, offscreen.
-  private precompile(): void {
-    const warm: THREE.Object3D[] = [this.makeBomb()];
-    for (const kind of FRUIT_KINDS) warm.push(this.makeFruit(kind), this.makeHalf(kind, 1), this.makeHalf(kind, -1));
+  // would stall the first cut of a round. Draw the new kinds once, offscreen.
+  private precompile(kinds: FruitKind[]): void {
+    const warm: THREE.Object3D[] = [];
+    if (!this.bombCompiled) {
+      warm.push(this.makeBomb());
+      this.bombCompiled = true;
+    }
+    for (const kind of kinds) warm.push(this.makeFruit(kind), this.makeHalf(kind, 1), this.makeHalf(kind, -1));
+    if (!warm.length) return;
     for (const obj of warm) {
       obj.position.set(-10000, 0, 0);
       this.scene.add(obj);
@@ -193,7 +228,7 @@ export class FruitScene {
   }
 
   private makeFruit(kind: FruitKind): THREE.Object3D {
-    const a = this.assets.get(kind)!;
+    const a = this.assetsFor(kind);
     const group = new THREE.Group();
     const inner = new THREE.Group();
     inner.scale.set(...kind.shape);
@@ -225,7 +260,7 @@ export class FruitScene {
 
   // The top half keeps the stem; the bottom half is the mirrored lower piece.
   private makeHalf(kind: FruitKind, side: 1 | -1): THREE.Object3D {
-    const a = this.assets.get(kind)!;
+    const a = this.assetsFor(kind);
     const group = new THREE.Group();
     const inner = new THREE.Group();
     inner.scale.set(...kind.shape);

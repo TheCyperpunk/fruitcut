@@ -284,6 +284,65 @@ body {
   font-size: 15px;
 }
 
+.load {
+  display: grid;
+  gap: 6px;
+  width: min(320px, 100%);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.load-bar {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.load-fill {
+  width: 0;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--lime), var(--accent-2));
+  transition: width 200ms linear;
+}
+
+.load.done .load-fill {
+  background: var(--lime);
+}
+
+.crash {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: var(--plum);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  z-index: 10;
+}
+
+.crash p {
+  margin: 0;
+}
+
+.crash button {
+  padding: 10px 20px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font: 400 18px / 1 var(--display);
+  cursor: pointer;
+}
+
 .privacy {
   max-width: 46ch;
   margin: 0;

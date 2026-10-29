@@ -27,8 +27,9 @@ npm run build        # static site in dist/
    never slices, so make one when a bomb passes.
 7. The ❚❚ button (or **P** / **Esc**) opens the menu: continue, scoreboard, or
    quit to the title (which turns the camera off).
-8. When time runs out the scoreboard appears. Enter a name once and your best
-   run is saved under it; everyone who plays sees the same board.
+8. The title screen asks for a name before Play. When time runs out the
+   scoreboard appears with your best run saved under that name; everyone who
+   plays sees the same board.
 
 ## Scoreboard
 

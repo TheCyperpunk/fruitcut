@@ -802,6 +802,14 @@ function runCameraLoop(): void {
 }
 
 async function start(): Promise<void> {
+  // The scoreboard needs a name, so the game asks for one before anything else.
+  setName(playerNameInput.value);
+  if (!player.name) {
+    startStatus.textContent = 'Type your name first, so your score can go on the scoreboard.';
+    playerNameInput.focus();
+    return;
+  }
+  startStatus.textContent = '';
   sfx.unlock();
   music.attach(sfx.context);
   startButton.disabled = true;
@@ -905,6 +913,10 @@ pauseButton.addEventListener('click', togglePause);
 settingsLink.addEventListener('click', openSettings);
 playerNameInput.value = player.name;
 playerNameInput.addEventListener('change', () => setName(playerNameInput.value));
+playerNameInput.addEventListener('input', () => (startStatus.textContent = ''));
+playerNameInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !startButton.disabled) void start();
+});
 boardLink.addEventListener('click', () => void openBoard());
 boardClose.addEventListener('click', closeBoard);
 boardQuit.addEventListener('click', quit);

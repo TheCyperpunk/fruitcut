@@ -80,6 +80,10 @@
         </div>
 
         <div class="go">
+          <label class="name-row">
+            <span>Your name for the scoreboard</span>
+            <input id="player-name" type="text" maxlength="20" autocomplete="nickname" placeholder="Type your name" required />
+          </label>
           <button id="start-button" type="button">Play</button>
           <p id="start-status" class="status" role="status"></p>
           <div id="load" class="load" aria-live="polite" hidden>
@@ -87,10 +91,6 @@
             <span id="load-text"></span>
           </div>
           <p class="privacy">Play turns on your camera. Video stays on this device and is never recorded or uploaded.</p>
-          <label class="name-row">
-            <span>Name on the scoreboard</span>
-            <input id="player-name" type="text" maxlength="20" autocomplete="nickname" placeholder="Your name" />
-          </label>
           <p id="best" class="best" hidden></p>
           <p class="links">
             <button id="board-link" class="link" type="button">Scoreboard</button>

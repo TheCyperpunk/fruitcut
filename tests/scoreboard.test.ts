@@ -1,5 +1,14 @@
-import { describe, expect, it } from 'vitest';
-import { cleanName, fetchBoard, loadPlayer, savePlayer, SHARED, submitScore } from '../src/scoreboard';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+
+// The module reads VITE_SUPABASE_* when it loads, and a developer's .env.local
+// would point these tests at the real board. Pin an empty backend first.
+let sb: typeof import('../src/scoreboard');
+beforeAll(async () => {
+  vi.stubEnv('VITE_SUPABASE_URL', '');
+  vi.stubEnv('VITE_SUPABASE_ANON_KEY', '');
+  vi.resetModules();
+  sb = await import('../src/scoreboard');
+});
 
 class MemoryStorage {
   private readonly map = new Map<string, string>();
@@ -13,40 +22,40 @@ class MemoryStorage {
 
 describe('scoreboard (this-device fallback)', () => {
   it('runs without a backend in tests', () => {
-    expect(SHARED).toBe(false);
+    expect(sb.SHARED).toBe(false);
   });
 
   it('gives a player a stable id and remembers their name', () => {
     const storage = new MemoryStorage();
-    const p = loadPlayer(storage);
+    const p = sb.loadPlayer(storage);
     expect(p.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(p.name).toBe('');
-    savePlayer(storage, { ...p, name: '  Sam   K ' });
-    const again = loadPlayer(storage);
+    sb.savePlayer(storage, { ...p, name: '  Sam   K ' });
+    const again = sb.loadPlayer(storage);
     expect(again.id).toBe(p.id);
     expect(again.name).toBe('Sam K');
   });
 
   it('trims and caps names', () => {
-    expect(cleanName('  a  very   long name indeed, truly  ')).toBe('a very long name ind');
+    expect(sb.cleanName('  a  very   long name indeed, truly  ')).toBe('a very long name ind');
   });
 
   it('keeps each player’s best score and ranks the top list', async () => {
     const storage = new MemoryStorage();
     const sam = { id: 'sam', name: 'Sam' };
     const ali = { id: 'ali', name: 'Ali' };
-    await submitScore(sam, 40, 3, storage);
-    await submitScore(sam, 25, 2, storage); // worse: ignored
-    await submitScore(ali, 60, 4, storage);
-    await submitScore({ id: 'nobody', name: '' }, 99, 9, storage); // no name: not recorded
+    await sb.submitScore(sam, 40, 3, storage);
+    await sb.submitScore(sam, 25, 2, storage); // worse: ignored
+    await sb.submitScore(ali, 60, 4, storage);
+    await sb.submitScore({ id: 'nobody', name: '' }, 99, 9, storage); // no name: not recorded
 
-    const board = await fetchBoard(sam, storage);
+    const board = await sb.fetchBoard(sam, storage);
     expect(board.rows.map((r) => [r.name, r.score])).toEqual([
       ['Ali', 60],
       ['Sam', 40],
     ]);
     expect(board.rank).toBe(2);
     expect(board.total).toBe(2);
-    expect((await fetchBoard({ id: 'new', name: 'New' }, storage)).rank).toBeNull();
+    expect((await sb.fetchBoard({ id: 'new', name: 'New' }, storage)).rank).toBeNull();
   });
 });
